@@ -38,7 +38,7 @@ func main() {
 			log.Print(err)
 			return
 		}
-		Postgresql.OrderPutDb(&order)
+		Postgresql.OrderPutDb(&order, &cache)
 		cache[order.OrderUid] = order
 		handler = Model.NewHandler(cache)
 

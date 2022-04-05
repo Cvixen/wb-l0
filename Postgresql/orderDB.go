@@ -10,17 +10,15 @@ import (
 /**
 Заполняем базу данных из значений ордера
 */
-func OrderPutDb(order *Model.Order) {
+func OrderPutDb(order *Model.Order, cache *map[string]Model.Order) {
 	db := NewPostgresDB()
 	defer db.Close()
-	_, err := db.Exec("INSERT INTO public.order (order_uid, track_number, entry,delivery_id,payment_id, locale, internal_signature, customer_id, delivery_service, shardkey, sm_id, date_created, oof_shard) VALUES ($1, $2, $3, (SELECT MAX(id_delivery) FROM public.delivery), (SELECT MAX(id_payment) FROM public.payment), $4, $5, $6, $7, $8, $9, $10, $11)",
-		order.OrderUid, order.TrackNumber, order.Entry, order.Locale, order.InternalSignature, order.CustomerId, order.DeliveryService, order.Shardkey, order.SmId, order.DateCreated, order.OofShard)
-	if err != nil {
-		log.Println(err)
+	_, exists := (*cache)[(*order).OrderUid]
+	if exists == true {
+		log.Println("OrderUid is exist in database")
 		return
 	}
-
-	_, err = db.Exec("INSERT INTO public.delivery (name,phone,zip,city,address,region,email) VALUES ($1,$2,$3,$4,$5,$6,$7)",
+	_, err := db.Exec("INSERT INTO public.delivery (name,phone,zip,city,address,region,email) VALUES ($1,$2,$3,$4,$5,$6,$7)",
 		order.Delivery.Name, order.Delivery.Phone, order.Delivery.Zip, order.Delivery.City, order.Delivery.Address, order.Delivery.Region, order.Delivery.Email)
 	if err != nil {
 		log.Println(err)
@@ -34,7 +32,12 @@ func OrderPutDb(order *Model.Order) {
 		log.Println(err)
 		return
 	}
-
+	_, err = db.Exec("INSERT INTO public.order (order_uid, track_number, entry,delivery_id,payment_id, locale, internal_signature, customer_id, delivery_service, shardkey, sm_id, date_created, oof_shard) VALUES ($1, $2, $3, (SELECT MAX(id_delivery) FROM public.delivery), (SELECT MAX(id_payment) FROM public.payment), $4, $5, $6, $7, $8, $9, $10, $11)",
+		order.OrderUid, order.TrackNumber, order.Entry, order.Locale, order.InternalSignature, order.CustomerId, order.DeliveryService, order.Shardkey, order.SmId, order.DateCreated, order.OofShard)
+	if err != nil {
+		log.Println(err)
+		return
+	}
 	for _, item := range order.Items {
 		_, err = db.Exec("INSERT INTO public.item (chrt_id,track_number,price,rid,name,sale,size,total_price,nm_id,brand,status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
 			item.ChrtId, item.TrackNumber, item.Price, item.Rid, item.Name, item.Sale, item.Size, item.TotalPrice, item.NmId,
@@ -54,7 +57,7 @@ func OrderPutDb(order *Model.Order) {
 /**
 Из базы данных добавляем данные в кэш, предварительно создав экземпляр ордера.
 */
-func FromDbToCash(cash *map[string]Model.Order) {
+func FromDbToCash(cache *map[string]Model.Order) {
 	db := NewPostgresDB()
 	defer db.Close()
 
@@ -128,6 +131,6 @@ func FromDbToCash(cash *map[string]Model.Order) {
 			}
 			order.Items = append(order.Items, item)
 		}
-		(*cash)[order.OrderUid] = order
+		(*cache)[order.OrderUid] = order
 	}
 }
